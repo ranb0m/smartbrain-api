@@ -8,11 +8,17 @@ const app = express();
 app.use(express.json());
 app.use(cors())
 
+
+// serialize in the context of the sqlite db allows for sequential execution of sql operations;
+// i.e. if there is a queue of sql calls, they will execute one after the other in the order specified
+// inside the serialize callback. This is to prevent a race condition between db calls, potentially 
+// resulting in different effects depending on which call finishes first
+
 db.serialize(() => {
     db.run('CREATE TABLE user (name TEXT, email TEXT NOT NULL UNIQUE, hash TEXT, entries INT)')
 })
 
-
+// debugging get request handler -- sends back all current users as a response
 
 app.get('/', (req, res) => {
     db.all('SELECT name, email FROM user;', function (err, rows) {
@@ -22,10 +28,11 @@ app.get('/', (req, res) => {
 
 app.post('/signin', (req, res) => {
     const { email, password } = req.body;
-    let success = false;
     db.get(`SELECT * FROM user WHERE email = '${email}';`, function (err, row) {
         console.log(row.hash, err);
         if (row) {
+            // compare hashed pass with the one sent via sign-in post request for a specific user
+
             bcrypt.compare(password, row.hash, function (err, result) {
                 console.log(result, err)
 
@@ -37,24 +44,29 @@ app.post('/signin', (req, res) => {
                     })
                     return;
                 } else {
-                    res.status(400).json('error logging in')
+                    res.status(400).json('error logging in: incorrect password')
 
                 }
             })
         } else {
 
-            res.status(400).json('error logging in')
+            res.status(400).json('error logging in: could not find user')
         }
     })
 });
 
 app.post('/register', (req, res) => {
     const { name, email, password } = req.body;
+
+    // put the password sent in the request body through several rounds of salting using bcrypt's
+    // hash function
+
     bcrypt.hash(password, bcrypt.genSaltSync(2), null, function (err, hash) {
         console.log(err)
         if (err)
             res.status(400).json('error hashing user')
         else {
+            // if good response, create a new row in user table with name, email, hashed pass, and entries set to 0 initially
 
             db.run(`INSERT INTO user VALUES ('${name}', '${email}', '${hash}', 0);`, function (err) {
                 console.log(err)
@@ -68,17 +80,6 @@ app.post('/register', (req, res) => {
         }
     })
 });
-
-app.get('/profile/:email', (req, res) => {
-    const { email } = req.params;
-
-    db.get("SELECT * FROM user WHERE email = '(?)'", [email], function (err, row) {
-        if (row) {
-            res.json(row)
-        }
-    })
-    res.status(400).json({ error: 'womp womp' })
-})
 
 app.put('/image', (req, res) => {
     const { email } = req.body;
