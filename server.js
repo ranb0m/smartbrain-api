@@ -1,3 +1,5 @@
+
+const clarifai = require('./clarifai_init.js')
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcrypt-nodejs');
@@ -7,6 +9,8 @@ const app = express();
 
 app.use(express.json());
 app.use(cors())
+
+console.log(clarifai.initializeClarifaiRequestOptions)
 
 
 // serialize in the context of the sqlite db allows for sequential execution of sql operations;
@@ -97,4 +101,24 @@ app.put('/image', (req, res) => {
     })
 })
 
-app.listen(3000)
+app.post('/imageurl', (req, res) => {
+    const { detectUrl } = req.body;
+    console.log(detectUrl)
+    fetch("https://api.clarifai.com/v2/models/" + 'face-detection' + "/outputs", clarifai.initializeClarifaiRequestOptions(detectUrl))
+    .then(response => response.json())
+    .then(response => {
+        console.log(response)
+        res.json(response)
+    }).catch(err => {
+        res.status(400).json('error:', err)
+    })
+})
+
+
+const PORT = process.env.PORT
+
+app.listen(PORT || 3000, () => {
+    console.log(`server is listening on port ${PORT}`)
+})
+
+console.log(process.env)
